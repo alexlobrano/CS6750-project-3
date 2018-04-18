@@ -1,6 +1,5 @@
 # A.py
 
-#
 # Implement the Hash-and-Sign RSA digital signature construction. You can reuse your
 # implementation of the RSA trapdoor function from last assignment. The signature scheme has three
 # algorithms:
@@ -16,12 +15,22 @@ filename = time.strftime("%Y%m%d-%H%M%S")
 sys.stdout = open(filename + '.txt', 'w')
 
 rsa = Hash_and_Sign_RSA()
-sk, pk = rsa.gen(filename)
+sk, pk = rsa.gen(filename)												# Generate secret key sk (d) and public key pk (N, e)
 
-m = randnum.randint(1, rsa.rsamodulus - 1)				# Generate integer x between 1 and N-1
-while(fractions.gcd(m, rsa.rsamodulus) != 1):			# Check if x is relatively prime to N
-	m = randnum.randint(1, rsa.rsamodulus - 1)			# If not relatively prime, generate new x and try again
+messages = [0] * 5
+sigma = [0] * 5
+
+for i in range(5):
+	messages[i] = randnum.randint(1, rsa.rsamodulus - 1)				# Generate message m between 1 and N-1
+	while(fractions.gcd(messages[i], rsa.rsamodulus) != 1):				# Check if m is relatively prime to N
+		messages[i] = randnum.randint(1, rsa.rsamodulus - 1)			# If not relatively prime, generate new m and try again
+	print "Message", i
+	sigma[i] = rsa.sign(sk, messages[i], pk[0])							# Compute signature for message m with sk
 	
-sigma = rsa.sign(sk, m, pk[0])
-ver = rsa.verify(pk[1], m, sigma, pk[0])
-assert ver == 1
+for i in range(5):	
+	ver = rsa.verify(pk[1], messages[i], sigma[i], pk[0])				# Verify the signature of each message is valid
+	assert ver == 1
+
+for i in range(5):	
+	ver = rsa.verify(pk[1], messages[i], sigma[(i+1) % 5], pk[0])		# Verify the signature of different messages are not valid
+	assert ver == 0

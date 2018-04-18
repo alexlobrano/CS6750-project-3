@@ -95,16 +95,52 @@ class Hash_and_Sign_RSA:
 		# Secret key d
 		self.d = modinv(self.e, self.phi) + self.phi	# Calculate d as modular inverse of e
 		
-		return self.d, (self.rsamodulus, self.e)
+		return self.d, (self.rsamodulus, self.e)		# Return sk and pk
 	
 	def sign(self, sk, m, N):
 		hash = hashlib.sha256(str(m))					# Convert m to string and compute hash
 		hash_int = int(hash.hexdigest(), 16)			# Convert hash to integer
 		sigma = pow(hash_int, sk, N)					# Calculate sigma = hash_int^sk mod N
-		return sigma
+		print "Message:", m
+		print "Signature", sigma
+		return sigma									# Return signature
 	
 	def verify(self, pk, m, sigma, N):
-		ver = format(pow(sigma, pk, N), 'x')			# Calculate ver = sigma^pk mod N and save as hex
 		hash = hashlib.sha256(str(m))					# Convert m to string and compute hash
+		ver = format(pow(sigma, pk, N), 'x')			# Calculate ver = sigma^pk mod N and save as hex
+		print "H(m):", hash.hexdigest()
+		print "Signature verification:", ver
 		if(hash.hexdigest() == ver): return 1 			# Check if H(m) equals ver
 		else: return 0
+		
+def solve_puzzle(x, n, filename):
+	print "\nSolving puzzle", x, "with", n, "zero bits"
+	s = 0
+	solved = False
+	while(not solved):
+		input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)	# Compute s || x
+		hash = hashlib.sha256(input)												# Compute H(s || x)
+		hash_bin = format(int(hash.hexdigest(), 16), 'b')							# Convert hash (hex string) to int, then format as binary string
+		# print "Salt:", s
+		# print "Input to SHA:", input
+		# print "Hash:", hash.hexdigest()
+		# print "Hash binary:", hash_bin.zfill(256)
+		# print "Leading zero bits:", 256 - len(hash_bin)
+		if(256 - len(hash_bin) == n):
+			solved = True
+			break
+		s += 1
+	return s
+	
+def verify_puzzle(s, x, n, filename):
+	print "\nVerifying solution", s, "to puzzle", x, "with", n, "zero bits"
+	input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)		# Compute s || x
+	hash = hashlib.sha256(input)													# Compute H(s || x)
+	hash_bin = format(int(hash.hexdigest(), 16), 'b')								# Convert hash (hex string) to int, then format as binary string
+	print "Hash:", hash.hexdigest()
+	print "Hash binary:", hash_bin.zfill(256)
+	print "Leading zero bits:", 256 - len(hash_bin)
+	if(256 - len(hash_bin) == n):													
+		return 1
+	else:
+		return 0
