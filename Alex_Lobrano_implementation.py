@@ -182,10 +182,18 @@ def gen_transaction(pks, sks, pkr, serial, bank):
 	message = (str(pks[1]), str(pkr[1]), serial)
 	transaction = rsa.sign(sks, message, pks[0])
 	if(pks != pkr):									# Check if sender and receiver are different (if not, it's a mint transaction)
-		bank[pks].remove(serial)					# Only remove the serial from sender
-	bank[pkr].append(serial)
+		for i in range(len(serial)):
+			bank[pks].remove(serial[i])					# Only remove the serial from sender
+	for i in range(len(serial)):
+		bank[pkr].append(serial[i])
 	return transaction
 
 def check_balance(pk, bank):
 	return len(bank[pk])
+	
+def print_coins(pk, bank):
+	print "Coins for pk", pk[1]
+	for i in range(len(bank[pk])):
+		print "Coin", i+1, ":", bank[pk][i]
+
 # def gen_block(sk, pk, tq, t, n):
