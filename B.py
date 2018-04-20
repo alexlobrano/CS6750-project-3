@@ -16,8 +16,8 @@ for i in range(5):
 	x = hashlib.sha256(generate_string(32)).hexdigest()
 	print "X:", x
 	start = time.time()
-	s = solve_puzzle(x, n, filename)
+	s = solve_puzzle(x, n)
 	end = time.time()
-	assert verify_puzzle(s, x, n, filename) == 1
+	assert verify_puzzle(s, x, n) == 1
 	print "Time taken solving puzzle with", n, "zero bits:", end - start
 

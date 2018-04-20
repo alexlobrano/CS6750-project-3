@@ -15,7 +15,7 @@ filename = time.strftime("%Y%m%d-%H%M%S")
 sys.stdout = open(filename + '.txt', 'w')
 
 rsa = Hash_and_Sign_RSA()
-sk, pk = rsa.gen(filename)												# Generate secret key sk (d) and public key pk (N, e)
+sk, pk = rsa.gen()														# Generate secret key sk (d) and public key pk (N, e)
 
 messages = [0] * 5
 sigma = [0] * 5

@@ -6,12 +6,14 @@ import fractions
 import hashlib
 import string
 import time
+import datetime
 import sys
+import Queue
 
 randnum = random.SystemRandom()
 
 # Generate prime number of size n bits
-def generate_prime(n, filename):
+def generate_prime(n):
 	
 	for i in xrange(3*pow(n,2)):						# Try for 3*n^2 iterations to find a prime number
 		p = randnum.getrandbits(n-1)					# Generate n-1 random bits
@@ -20,11 +22,11 @@ def generate_prime(n, filename):
 			p = "0" + p									# Add missing zeroes
 		p = "1" + p										# Add 1 to front to ensure n bits
 		p = int(p, 2)									# Convert back to int
-		if(isPrimeMR(p, filename)): 					# Check using Miller-Rabin if p is prime
+		if(isPrimeMR(p)): 					# Check using Miller-Rabin if p is prime
 			return p
 
 # Get number p, test if it's prime using Miller-Rabin
-def isPrimeMR(p, filename):
+def isPrimeMR(p):
 	
 	if(p % 2 == 0): 									# Check if p is even
 		return False
@@ -63,7 +65,7 @@ def modinv(a, b):
 def generate_string(size):
 	temp = ''
 	for i in range(size):
-		temp += random.choice(string.ascii_letters + string.digits)
+		temp += random.choice(string.ascii_letters[0:6] + string.digits)
 	return temp
 	
 class Hash_and_Sign_RSA:
@@ -72,14 +74,14 @@ class Hash_and_Sign_RSA:
 		pass
 
 	# Use generate_prime	
-	def gen(self, filename):
+	def gen(self):
 		
 		# security parameter
 		self.n = 1024
 		
 		# Primes p and q
-		self.p = generate_prime(self.n, filename)		# Generate prime p
-		self.q = generate_prime(self.n, filename)		# Generate prime q
+		self.p = generate_prime(self.n)		# Generate prime p
+		self.q = generate_prime(self.n)		# Generate prime q
 		
 		# RSA modulus N = pq
 		self.rsamodulus = self.p * self.q				# Calculate RSA modulus N = p*q
@@ -102,18 +104,36 @@ class Hash_and_Sign_RSA:
 		hash_int = int(hash.hexdigest(), 16)			# Convert hash to integer
 		sigma = pow(hash_int, sk, N)					# Calculate sigma = hash_int^sk mod N
 		print "Message:", m
-		print "Signature", sigma
+		print "Signature:", sigma
 		return sigma									# Return signature
 	
 	def verify(self, pk, m, sigma, N):
 		hash = hashlib.sha256(str(m))					# Convert m to string and compute hash
 		ver = format(pow(sigma, pk, N), 'x')			# Calculate ver = sigma^pk mod N and save as hex
 		print "H(m):", hash.hexdigest()
-		print "Signature verification:", ver
-		if(hash.hexdigest() == ver): return 1 			# Check if H(m) equals ver
-		else: return 0
+		print "Signature verification:", ver.zfill(64)
+		if(hash.hexdigest() == ver.zfill(64)): 			# Check if H(m) equals ver
+			print "Verification success"
+			return 1 	
+		else: 
+			print "Verification fail"
+			return 0
+
+class Block:
+	def __init__(self, timestamp, sk, pk, transactions, previous_hash, solution, bank):
+		self.timestamp = timestamp
+		self.transactions = transactions
+		mint = [None] * 10
+		for i in range(10):
+			mint[i] = generate_string(32)
+		mint = gen_transaction(pk, sk, pk, mint, bank)
+		self.mint = mint
+		self.previous_hash = previous_hash
+		self.solution = solution
+		hash = hashlib.sha256(str(timestamp) + str(transactions) + str(mint) + str(previous_hash) + str(solution))
+		self.hash = hash.hexdigest()
 		
-def solve_puzzle(x, n, filename):
+def solve_puzzle(x, n):
 	print "\nSolving puzzle", x, "with", n, "zero bits"
 	s = 0
 	solved = False
@@ -132,7 +152,7 @@ def solve_puzzle(x, n, filename):
 		s += 1
 	return s
 	
-def verify_puzzle(s, x, n, filename):
+def verify_puzzle(s, x, n):
 	print "\nVerifying solution", s, "to puzzle", x, "with", n, "zero bits"
 	input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)		# Compute s || x
 	hash = hashlib.sha256(input)													# Compute H(s || x)
@@ -144,3 +164,26 @@ def verify_puzzle(s, x, n, filename):
 		return 1
 	else:
 		return 0
+		
+def create_user():
+	rsa = Hash_and_Sign_RSA()
+	sk, pk = rsa.gen()
+	return sk, pk
+	
+def init_ledger(sk, pk, bank):
+	return Block(datetime.datetime.now(), sk, pk, 0, 0, 0, bank)
+
+def init_transaction_queue():
+	return Queue.Queue()
+	
+# pks = (N, e), pkr = (N, e)
+def gen_transaction(pks, sks, pkr, serial, bank):
+	rsa = Hash_and_Sign_RSA()
+	message = (str(pks[1]), str(pkr[1]), serial)
+	transaction = rsa.sign(sks, message, pks[0])
+	if(pks != pkr):									# Check if sender and receiver are different (if not, it's a mint transaction)
+		bank[pks].remove(serial)					# Only remove the serial from sender
+	bank[pkr].append(serial)
+	return transaction
+
+# def gen_block(sk, pk, tq, t, n):
