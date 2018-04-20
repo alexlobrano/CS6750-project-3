@@ -27,8 +27,17 @@ for i in range(total_users):
 	#users.append(create_user())		# returns sk and pk = (N, e)
 	bank[users[i][1]] = []
 
+coins = []
+for i in range(100):
+	coins.append(generate_string(32))
+
+for i in range(100):
+	bank[users[i/10][1]].append(coins[i])
+
 #transaction = gen_transaction(pk1, sk1, pk2, coins)
 
 ledger = init_ledger(users[0][0], users[0][1], bank)
 transaction_queue = init_transaction_queue()
-print "Users:", users
+
+balance = check_balance(users[5][1], bank)
+print balance

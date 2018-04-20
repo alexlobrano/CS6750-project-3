@@ -186,4 +186,6 @@ def gen_transaction(pks, sks, pkr, serial, bank):
 	bank[pkr].append(serial)
 	return transaction
 
+def check_balance(pk, bank):
+	return len(bank[pk])
 # def gen_block(sk, pk, tq, t, n):
