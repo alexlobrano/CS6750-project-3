@@ -120,13 +120,13 @@ class Hash_and_Sign_RSA:
 			return 0
 
 class Block:
-	def __init__(self, timestamp, sk, pk, transactions, previous_hash, solution, bank):
+	def __init__(self, timestamp, sk, pk, transactions, previous_hash, solution, bank, tq):
 		self.timestamp = timestamp
 		self.transactions = transactions
 		mint = [None] * 10
 		for i in range(10):
 			mint[i] = generate_string(32)
-		mint = gen_transaction(pk, sk, pk, mint, bank)
+		mint = gen_transaction(pk, sk, pk, mint, bank, tq)
 		self.mint = mint
 		self.previous_hash = previous_hash
 		self.solution = solution
@@ -170,17 +170,18 @@ def create_user():
 	sk, pk = rsa.gen()
 	return sk, pk
 	
-def init_ledger(sk, pk, bank):
-	return Block(datetime.datetime.now(), sk, pk, 0, 0, 0, bank)
+def init_ledger(sk, pk, bank, tq):
+	return Block(datetime.datetime.now(), sk, pk, 0, 0, 0, bank, tq)
 
 def init_transaction_queue():
 	return Queue.Queue()
 	
 # pks = (N, e), pkr = (N, e)
-def gen_transaction(pks, sks, pkr, serial, bank):
+def gen_transaction(pks, sks, pkr, serial, bank, tq):
 	rsa = Hash_and_Sign_RSA()
 	message = (str(pks[1]), str(pkr[1]), serial)
 	transaction = rsa.sign(sks, message, pks[0])
+	tq.put(transaction)
 	if(pks != pkr):									# Check if sender and receiver are different (if not, it's a mint transaction)
 		for i in range(len(serial)):
 			bank[pks].remove(serial[i])					# Only remove the serial from sender
@@ -196,4 +197,11 @@ def print_coins(pk, bank):
 	for i in range(len(bank[pk])):
 		print "Coin", i+1, ":", bank[pk][i]
 
-# def gen_block(sk, pk, tq, t, n):
+def gen_block(sk, pk, tq, t, bank, current_block, n):
+	transactions = []
+	if(t > tq.qsize()):			# Check if there are less than t transactions in the queue
+		t = tq.qsize()			# If so, only pop the maximum number of transactions possible
+	for i in range(t):
+		transactions.append(tq.get())
+	solution = solve_puzzle(current_block.hash, n)
+	return Block(datetime.datetime.now(), sk, pk, transactions, current_block, solution, bank, tq)

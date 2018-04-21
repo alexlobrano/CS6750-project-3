@@ -28,13 +28,18 @@ for i in range(total_users):
 	#users.append(create_user())		# returns sk and pk = (N, e)
 	bank[users[i][1]] = []
 
-ledger = [init_ledger(users[0][0], users[0][1], bank)]
-transaction_queue = init_transaction_queue()
-print_coins(users[0][1], bank)
+tq = init_transaction_queue()
+ledger = [init_ledger(users[0][0], users[0][1], bank, tq)]
 
 send_coins = bank[users[0][1]][0:5]
-print send_coins
-transaction = gen_transaction(users[0][1], users[0][0], users[4][1], send_coins, bank)
+transaction = gen_transaction(users[0][1], users[0][0], users[4][1], send_coins, bank, tq)
 
-print_coins(users[0][1], bank)
-print_coins(users[4][1], bank)
+ledger.append(gen_block(users[0][0], users[0][1], tq, 1, bank, ledger[-1], 5))
+print check_balance(users[0][1], bank)
+
+# need to make more transactions and add the transactions to the queue
+# create generate block function
+# create verify block function
+
+# print_coins(users[0][1], bank)
+# print_coins(users[4][1], bank)
