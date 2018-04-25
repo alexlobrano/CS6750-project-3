@@ -120,13 +120,14 @@ class Hash_and_Sign_RSA:
 			return 0
 
 class Block:
-	def __init__(self, timestamp, sk, pk, transactions, previous_hash, solution, bank, tq):
+	def __init__(self, timestamp, index, sk, pk, transactions, previous_hash, solution, bank, tq, add):
 		self.timestamp = timestamp
+		self.index = index
 		self.transactions = transactions
 		mint = [None] * 10
 		for i in range(10):
 			mint[i] = generate_string(32)
-		mint = gen_transaction(pk, sk, pk, mint, bank, tq)
+		mint = gen_transaction(pk, sk, pk, mint, bank, tq, add)
 		self.mint = mint
 		self.previous_hash = previous_hash
 		self.solution = solution
@@ -171,22 +172,21 @@ def create_user():
 	return sk, pk
 	
 def init_ledger(sk, pk, bank, tq):
-	return Block(datetime.datetime.now(), sk, pk, 0, 0, 0, bank, tq)
+	return Block(datetime.datetime.now(), 0, sk, pk, 0, 0, 0, bank, tq, False)
 
 def init_transaction_queue():
 	return Queue.Queue()
 	
 # pks = (N, e), pkr = (N, e)
-def gen_transaction(pks, sks, pkr, serial, bank, tq):
+def gen_transaction(pks, sks, pkr, serial, bank, tq, add):
 	rsa = Hash_and_Sign_RSA()
 	message = (str(pks[1]), str(pkr[1]), serial)
-	transaction = rsa.sign(sks, message, pks[0])
-	tq.put(transaction)
-	if(pks != pkr):									# Check if sender and receiver are different (if not, it's a mint transaction)
+	transaction = (message, rsa.sign(sks, message, pks[0]))
+	if(add == True):									# Check if you should add the transaction to the queue
+		tq.put(transaction)
+	else:
 		for i in range(len(serial)):
-			bank[pks].remove(serial[i])					# Only remove the serial from sender
-	for i in range(len(serial)):
-		bank[pkr].append(serial[i])
+			bank[pkr].append(serial[i])
 	return transaction
 
 def check_balance(pk, bank):
@@ -197,11 +197,11 @@ def print_coins(pk, bank):
 	for i in range(len(bank[pk])):
 		print "Coin", i+1, ":", bank[pk][i]
 
-def gen_block(sk, pk, tq, t, bank, current_block, n):
+def gen_block(index, sk, pk, tq, t, bank, current_block, n):
 	transactions = []
 	if(t > tq.qsize()):			# Check if there are less than t transactions in the queue
 		t = tq.qsize()			# If so, only pop the maximum number of transactions possible
 	for i in range(t):
 		transactions.append(tq.get())
 	solution = solve_puzzle(current_block.hash, n)
-	return Block(datetime.datetime.now(), sk, pk, transactions, current_block, solution, bank, tq)
+	return Block(datetime.datetime.now(), index, sk, pk, transactions, current_block, solution, bank, tq, True)
