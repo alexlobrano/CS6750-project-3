@@ -1,10 +1,4 @@
-# B.py
-
-# Implement the Proof-of-Work (PoW) construction based on hash puzzles discussed in class:
-# - SolvePuzzle(x, n): Find a value s in {0, 1}^n such that H(s, x) starts with n zero bits.
-# - VerPuzzle(s, x, n): Test if H(s, x) starts with n zero bits.
-# Use the SHA-256 hash function. Vary the parameter n from 5 to 25 (at steps of 5) and record the
-# timing it takes to solve the puzzle.
+# C.py
 
 from Alex_Lobrano_implementation import *
 
