@@ -74,14 +74,18 @@ print "Balance of user 2:", check_balance(user_pks[2], bank), "\n"
 # User 0 creates a transaction to send 3 coins to user 1
 # User 2 creates a transaction to send 4 coins to user 0
 # User 2 creates a transaction to send the same 4 coins to user 1
+print "Creating transaction from user 0 to user 1"
 send_coins = bank[user_pks[0]][0:3]
 transaction = gen_transaction(user_pks[0], key_dict[user_pks[0]], user_pks[1], send_coins, bank, tq, True)
+print "Creating transaction from user 2 to user 0"
 send_coins = bank[user_pks[2]][0:4]
 transaction = gen_transaction(user_pks[2], key_dict[user_pks[2]], user_pks[0], send_coins, bank, tq, True)
+print "Creating transaction from user 2 to user 1"
 send_coins = bank[user_pks[2]][0:4]
 transaction = gen_transaction(user_pks[2], key_dict[user_pks[2]], user_pks[1], send_coins, bank, tq, True)
 
 # User 1 generates a block using the previous 3 transactions
+print "Generating block by user 1"
 block = gen_block(len(ledger), key_dict[user_pks[1]], user_pks[1], tq, 3, bank, ledger[-1], 5)
 if(ver_block(len(ledger), block, tq, bank, ledger, 5)): 
 	print "Adding block to ledger\n"
@@ -95,6 +99,7 @@ print "Balance of user 1:", check_balance(user_pks[1], bank)
 print "Balance of user 2:", check_balance(user_pks[2], bank), "\n"
 
 # User 1 generates a block using the 2 valid transactions which were added back
+print "Generating block by user 1"
 block = gen_block(len(ledger), key_dict[user_pks[1]], user_pks[1], tq, 3, bank, ledger[-1], 5)
 if(ver_block(len(ledger), block, tq, bank, ledger, 5)): 
 	print "Adding block to ledger\n"
