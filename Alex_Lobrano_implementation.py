@@ -119,19 +119,20 @@ class Hash_and_Sign_RSA:
 			print "Verification fail\n"
 			return 0
 
+# pk = (N, e)
 class Block:
-	def __init__(self, timestamp, index, sk, pk, transactions, previous_hash, solution, bank, tq, add):
+	def __init__(self, timestamp, index, sk, pk, transactions, previous_hash, solution, bank, tq):
 		self.timestamp = timestamp
 		self.index = index
 		self.transactions = transactions
 		mint = [None] * 10
 		for i in range(10):
 			mint[i] = generate_string(32)
-		mint = gen_transaction(pk, sk, pk, mint, bank, tq, add)
+		mint = gen_transaction(pk, sk, pk, mint, bank, tq, False)	# Mint transaction uses same pk for sender and receiver, and don't add to queue
 		self.mint = mint
 		self.previous_hash = previous_hash
 		self.solution = solution
-		hash = hashlib.sha256(str(timestamp) + str(transactions) + str(mint) + str(previous_hash) + str(solution))
+		hash = hashlib.sha256(str(timestamp) + str(index) + str(transactions) + str(mint) + str(previous_hash) + str(solution))
 		self.hash = hash.hexdigest()
 		
 def solve_puzzle(x, n):
@@ -142,10 +143,10 @@ def solve_puzzle(x, n):
 		input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)	# Compute s || x
 		hash = hashlib.sha256(input)												# Compute H(s || x)
 		hash_bin = format(int(hash.hexdigest(), 16), 'b')							# Convert hash (hex string) to int, then format as binary string
-		if(256 - len(hash_bin) == n):
+		if(256 - len(hash_bin) == n):												# Check if the number of leading zeroes is n
 			solved = True
 			break
-		s += 1
+		s += 1																		# If not, increment s and try again
 	print "Solution:", s, "\n"
 	return s
 	
@@ -157,7 +158,7 @@ def verify_puzzle(s, x, n):
 	print "Hash:", hash.hexdigest()
 	print "Hash in binary form:", hash_bin.zfill(256)
 	print "Leading zero bits:", 256 - len(hash_bin), "\n"
-	if(256 - len(hash_bin) == n):													
+	if(256 - len(hash_bin) == n):													# Check if the number of leading zeroes is n										
 		return 1
 	else:
 		return 0
@@ -167,8 +168,12 @@ def create_user():
 	sk, pk = rsa.gen()
 	return sk, pk
 	
+# pk = (N, e)
 def init_ledger(sk, pk, bank, tq):
-	block = Block(datetime.datetime.now(), 0, sk, pk, 0, 0, 0, bank, tq, False)
+	# Create genesis block 0 with transactions, previous_hash, solution = 0. 
+	block = Block(datetime.datetime.now(), 0, sk, pk, 0, 0, 0, bank, tq)
+	
+	# Process mint transaction
 	for i in range(len(block.mint[0][4])):
 		pkr = (int(block.mint[0][2]), int(block.mint[0][3]))
 		coin = block.mint[0][4][i]
@@ -181,9 +186,9 @@ def init_transaction_queue():
 # pks = (N, e), pkr = (N, e)
 def gen_transaction(pks, sks, pkr, serial, bank, tq, add):
 	rsa = Hash_and_Sign_RSA()
-	message = (str(pks[0]), str(pks[1]), str(pkr[0]), str(pkr[1]), serial)
-	transaction = (message, rsa.sign(sks, message, pks[0]))
-	if(add == True):									# Check if you should add the transaction to the queue
+	message = (str(pks[0]), str(pks[1]), str(pkr[0]), str(pkr[1]), serial)		# Generate message (pks, pkr, coins)
+	transaction = (message, rsa.sign(sks, message, pks[0]))						# Save transaction as (message, signature)
+	if(add == True):															# Check if you should add the transaction to the queue
 		tq.put(transaction)
 	return transaction
 
@@ -195,17 +200,18 @@ def print_coins(pk, bank):
 	for i in range(len(bank[pk])):
 		print "Coin", i+1, ":", bank[pk][i]
 
-def gen_block(index, sk, pk, tq, t, bank, current_block, n):
+# pk = (N, e)
+def gen_block(index, sk, pk, tq, t, bank, previous_block, n):
 	transactions = []
 	transactions_str = ""
-	if(t > tq.qsize()):			# Check if there are less than t transactions in the queue
-		t = tq.qsize()			# If so, only pop the maximum number of transactions possible
-	for i in range(t):
-		temp = tq.get()
-		transactions_str += str(temp[1])
-		transactions.append(temp)
-	solution = solve_puzzle(current_block.hash + transactions_str, n)
-	return Block(datetime.datetime.now(), index, sk, pk, transactions, current_block.hash, solution, bank, tq, False)
+	if(t > tq.qsize()):														# Check if there are less than t transactions in the queue
+		t = tq.qsize()														# If so, only pop the maximum number of transactions possible
+	for i in range(t):														
+		temp = tq.get()														# Get a transaction
+		transactions_str += str(temp[1])									# Save the signatures as strings
+		transactions.append(temp)											# Append the whole transaction to be saved in the block
+	solution = solve_puzzle(previous_block.hash + transactions_str, n)		# Solve the puzzle with the previous block hash and transaction strings
+	return Block(datetime.datetime.now(), index, sk, pk, transactions, previous_block.hash, solution, bank, tq)
 	
 def ver_block(index, block, tq, bank, ledger, n):
 	print "Verifying block\n"
@@ -216,11 +222,11 @@ def ver_block(index, block, tq, bank, ledger, n):
 	# Verify signatures on transactions
 	print "Verifying transactions"
 	for i in range(len(transactions)):
-		transactions_str += str(transactions[i][1])
-		if(not rsa.verify(int(transactions[i][0][1]), transactions[i][0], transactions[i][1], int(transactions[i][0][0]))): #pk, m, sigma, N
+		transactions_str += str(transactions[i][1])							# Save the signatures as strings
+		if(not rsa.verify(int(transactions[i][0][1]), transactions[i][0], transactions[i][1], int(transactions[i][0][0]))): # pk, m, sigma, N
 			print "Verification of transaction signature failed"
-			print "Adding transactions back to queue minus the invalid transaction"
-			for x in range(len(transactions)):				# Put all transactions other than this invalid one back into queue
+			print "Adding transactions back to queue minus the invalid transaction\n"
+			for x in range(len(transactions)):								# Put all transactions other than this invalid one back into queue
 					if(x == i): continue
 					tq.put(transactions[x])
 			return 0
@@ -229,52 +235,49 @@ def ver_block(index, block, tq, bank, ledger, n):
 	# Verify hash of previous block
 	print "Verifying hash of previous block"
 	previous_hash = block.previous_hash
-	if(previous_hash != ledger[index-1].hash):
-		print "Previous hash is incorrect"
+	if(previous_hash != ledger[index-1].hash):								# Check if previous hash in block equals hash saved in ledger
+		print "Previous hash is incorrect\n"
 		return 0
 	print "Previous hash is correct\n"
 	
 	# Verify solution to puzzle
 	print "Verifying solution to puzzle"
 	solution = block.solution
-	if(not verify_puzzle(solution, previous_hash + transactions_str, n)):
-		print "Solution to puzzle is incorrect"
+	if(not verify_puzzle(solution, previous_hash + transactions_str, n)):	# Check if solution in block equals previous hash plus transactions
+		print "Solution to puzzle is incorrect\n"
 		return 0
 	print "Solution to puzzle is correct\n"
 	
 	# Verify coins are not double spent
+	# If sender has sufficient funds for transactions and owns the coins, then it will be processed
+	# If a transaction is found involving insufficient funds or double spending, all previous transactions are reversed and added back to queue
 	print "Verifying coins are not double spent"
-	for i in range(len(transactions)):							# Number of transactions
-		for j in range(len(transactions[i][0][4])):				# Number of coins in the transaction
-			pks = (int(transactions[i][0][0]), int(transactions[i][0][1]))
-			coin = transactions[i][0][4][j]
-			if(pks not in bank or coin not in bank[pks]):
+	for i in range(len(transactions)):										# Number of transactions
+		for j in range(len(transactions[i][0][4])):							# Number of coins in the transaction
+			pks = (int(transactions[i][0][0]), int(transactions[i][0][1]))	# Get public key of sender
+			coin = transactions[i][0][4][j]									# Get coin
+			if(pks not in bank or coin not in bank[pks]):					# Check if user is in back and coin is owned by user
 				if(pks not in bank):
-					print "Sender does not exist"
+					print "Sender does not exist\n"
 				else:
-					print "Sender does not own this coin"
-				for x in range(i):								# Undo previous transactions
-					for y in range(len(transactions[x][0][4])):
-						pks = (int(transactions[x][0][0]), int(transactions[x][0][1]))
-						pkr = (int(transactions[x][0][2]), int(transactions[x][0][3]))
-						coin = transactions[x][0][4][y]
-						bank[pkr].remove(coin)					# Remove the coins from receiver
-						bank[pks].append(coin)					# Add coins to sender
-				for x in range(len(transactions)):				# Put all transactions other than this invalid one back into queue
+					print "Sender does not own this coin\n"
+				for x in range(i):											# Undo transactions processed previous to this one
+					for y in range(len(transactions[x][0][4])):				# Return number of coins in transaction
+						pks = (int(transactions[x][0][0]), int(transactions[x][0][1]))	# Get public key of sender
+						pkr = (int(transactions[x][0][2]), int(transactions[x][0][3]))	# Get public key of receiver
+						coin = transactions[x][0][4][y]									# Get coin
+						bank[pkr].remove(coin)								# Remove the coins from receiver
+						bank[pks].append(coin)								# Add coins to sender
+				for x in range(len(transactions)):							# Put all transactions other than this invalid one back into queue
 					if(x == i): continue
 					tq.put(transactions[x])
 				return 0
-		for j in range(len(transactions[i][0][4])):
-			pks = (int(transactions[i][0][0]), int(transactions[i][0][1]))
-			pkr = (int(transactions[i][0][2]), int(transactions[i][0][3]))
-			coin = transactions[i][0][4][j]
-			print "I:", i
-			print "J:", j
-			print "Sender:", pks
-			print "Receiver:", pkr
-			print "Coin:", coin, "\n"
-			bank[pks].remove(coin)					# Remove the coins from sender
-			bank[pkr].append(coin)					# Add coins to receiver
+		for j in range(len(transactions[i][0][4])):							# Number of coins in the transaction
+			pks = (int(transactions[i][0][0]), int(transactions[i][0][1]))	# Get public key of sender
+			pkr = (int(transactions[i][0][2]), int(transactions[i][0][3]))	# Get public key of receiver
+			coin = transactions[i][0][4][j]									# Get coin
+			bank[pks].remove(coin)											# Remove the coins from sender
+			bank[pkr].append(coin)											# Add coins to receiver
 	print "No coins have been double spent\n"
 	print "Block has been verified\n"
 	
