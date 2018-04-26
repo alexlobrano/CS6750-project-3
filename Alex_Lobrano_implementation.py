@@ -104,7 +104,7 @@ class Hash_and_Sign_RSA:
 		hash_int = int(hash.hexdigest(), 16)			# Convert hash to integer
 		sigma = pow(hash_int, sk, N)					# Calculate sigma = hash_int^sk mod N
 		print "Message:", m
-		print "Signature:", sigma
+		print "Signature:", sigma, "\n"
 		return sigma									# Return signature
 	
 	def verify(self, pk, m, sigma, N):
@@ -113,10 +113,10 @@ class Hash_and_Sign_RSA:
 		print "H(m):", hash.hexdigest()
 		print "Signature verification:", ver.zfill(64)
 		if(hash.hexdigest() == ver.zfill(64)): 			# Check if H(m) equals ver
-			print "Verification success"
+			print "Verification success\n"
 			return 1 	
 		else: 
-			print "Verification fail"
+			print "Verification fail\n"
 			return 0
 
 class Block:
@@ -135,32 +135,28 @@ class Block:
 		self.hash = hash.hexdigest()
 		
 def solve_puzzle(x, n):
-	print "\nSolving puzzle", x, "with", n, "zero bits"
+	print "Solving puzzle", x, "with", n, "zero bits"
 	s = 0
 	solved = False
 	while(not solved):
 		input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)	# Compute s || x
 		hash = hashlib.sha256(input)												# Compute H(s || x)
 		hash_bin = format(int(hash.hexdigest(), 16), 'b')							# Convert hash (hex string) to int, then format as binary string
-		# print "Salt:", s
-		# print "Input to SHA:", input
-		# print "Hash:", hash.hexdigest()
-		# print "Hash binary:", hash_bin.zfill(256)
-		# print "Leading zero bits:", 256 - len(hash_bin)
 		if(256 - len(hash_bin) == n):
 			solved = True
 			break
 		s += 1
+	print "Solution:", s, "\n"
 	return s
 	
 def verify_puzzle(s, x, n):
-	print "\nVerifying solution", s, "to puzzle", x, "with", n, "zero bits"
+	print "Verifying solution", s, "to puzzle", x, "with", n, "zero bits"
 	input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)		# Compute s || x
 	hash = hashlib.sha256(input)													# Compute H(s || x)
 	hash_bin = format(int(hash.hexdigest(), 16), 'b')								# Convert hash (hex string) to int, then format as binary string
 	print "Hash:", hash.hexdigest()
-	print "Hash binary:", hash_bin.zfill(256)
-	print "Leading zero bits:", 256 - len(hash_bin)
+	print "Hash in binary form:", hash_bin.zfill(256)
+	print "Leading zero bits:", 256 - len(hash_bin), "\n"
 	if(256 - len(hash_bin) == n):													
 		return 1
 	else:
@@ -172,7 +168,12 @@ def create_user():
 	return sk, pk
 	
 def init_ledger(sk, pk, bank, tq):
-	return Block(datetime.datetime.now(), 0, sk, pk, 0, 0, 0, bank, tq, False)
+	block = Block(datetime.datetime.now(), 0, sk, pk, 0, 0, 0, bank, tq, False)
+	for i in range(len(block.mint[0][4])):
+		pkr = (int(block.mint[0][2]), int(block.mint[0][3]))
+		coin = block.mint[0][4][i]
+		bank[pkr].append(coin)					# Add coins to receiver (same as sender in this case)
+	return block
 
 def init_transaction_queue():
 	return Queue.Queue()
@@ -180,13 +181,10 @@ def init_transaction_queue():
 # pks = (N, e), pkr = (N, e)
 def gen_transaction(pks, sks, pkr, serial, bank, tq, add):
 	rsa = Hash_and_Sign_RSA()
-	message = (str(pks[1]), str(pkr[1]), serial)
+	message = (str(pks[0]), str(pks[1]), str(pkr[0]), str(pkr[1]), serial)
 	transaction = (message, rsa.sign(sks, message, pks[0]))
 	if(add == True):									# Check if you should add the transaction to the queue
 		tq.put(transaction)
-	else:
-		for i in range(len(serial)):
-			bank[pkr].append(serial[i])
 	return transaction
 
 def check_balance(pk, bank):
@@ -199,9 +197,92 @@ def print_coins(pk, bank):
 
 def gen_block(index, sk, pk, tq, t, bank, current_block, n):
 	transactions = []
+	transactions_str = ""
 	if(t > tq.qsize()):			# Check if there are less than t transactions in the queue
 		t = tq.qsize()			# If so, only pop the maximum number of transactions possible
 	for i in range(t):
-		transactions.append(tq.get())
-	solution = solve_puzzle(current_block.hash, n)
-	return Block(datetime.datetime.now(), index, sk, pk, transactions, current_block, solution, bank, tq, True)
+		temp = tq.get()
+		transactions_str += str(temp[1])
+		transactions.append(temp)
+	solution = solve_puzzle(current_block.hash + transactions_str, n)
+	return Block(datetime.datetime.now(), index, sk, pk, transactions, current_block.hash, solution, bank, tq, False)
+	
+def ver_block(index, block, tq, bank, ledger, n):
+	print "Verifying block\n"
+	rsa = Hash_and_Sign_RSA()
+	transactions = block.transactions
+	transactions_str = ""
+	
+	# Verify signatures on transactions
+	print "Verifying transactions"
+	for i in range(len(transactions)):
+		transactions_str += str(transactions[i][1])
+		if(not rsa.verify(int(transactions[i][0][1]), transactions[i][0], transactions[i][1], int(transactions[i][0][0]))): #pk, m, sigma, N
+			print "Verification of transaction signature failed"
+			print "Adding transactions back to queue minus the invalid transaction"
+			for x in range(len(transactions)):				# Put all transactions other than this invalid one back into queue
+					if(x == i): continue
+					tq.put(transactions[x])
+			return 0
+	print "All transaction signatures successfully verified\n"
+	
+	# Verify hash of previous block
+	print "Verifying hash of previous block"
+	previous_hash = block.previous_hash
+	if(previous_hash != ledger[index-1].hash):
+		print "Previous hash is incorrect"
+		return 0
+	print "Previous hash is correct\n"
+	
+	# Verify solution to puzzle
+	print "Verifying solution to puzzle"
+	solution = block.solution
+	if(not verify_puzzle(solution, previous_hash + transactions_str, n)):
+		print "Solution to puzzle is incorrect"
+		return 0
+	print "Solution to puzzle is correct\n"
+	
+	# Verify coins are not double spent
+	print "Verifying coins are not double spent"
+	for i in range(len(transactions)):							# Number of transactions
+		for j in range(len(transactions[i][0][4])):				# Number of coins in the transaction
+			pks = (int(transactions[i][0][0]), int(transactions[i][0][1]))
+			coin = transactions[i][0][4][j]
+			if(pks not in bank or coin not in bank[pks]):
+				if(pks not in bank):
+					print "Sender does not exist"
+				else:
+					print "Sender does not own this coin"
+				for x in range(i):								# Undo previous transactions
+					for y in range(len(transactions[x][0][4])):
+						pks = (int(transactions[x][0][0]), int(transactions[x][0][1]))
+						pkr = (int(transactions[x][0][2]), int(transactions[x][0][3]))
+						coin = transactions[x][0][4][y]
+						bank[pkr].remove(coin)					# Remove the coins from receiver
+						bank[pks].append(coin)					# Add coins to sender
+				for x in range(len(transactions)):				# Put all transactions other than this invalid one back into queue
+					if(x == i): continue
+					tq.put(transactions[x])
+				return 0
+		for j in range(len(transactions[i][0][4])):
+			pks = (int(transactions[i][0][0]), int(transactions[i][0][1]))
+			pkr = (int(transactions[i][0][2]), int(transactions[i][0][3]))
+			coin = transactions[i][0][4][j]
+			print "I:", i
+			print "J:", j
+			print "Sender:", pks
+			print "Receiver:", pkr
+			print "Coin:", coin, "\n"
+			bank[pks].remove(coin)					# Remove the coins from sender
+			bank[pkr].append(coin)					# Add coins to receiver
+	print "No coins have been double spent\n"
+	print "Block has been verified\n"
+	
+	# Process mint transaction
+	print "Processing mint transaction\n"
+	for i in range(len(block.mint[0][4])):
+		pkr = (int(block.mint[0][2]), int(block.mint[0][3]))
+		coin = block.mint[0][4][i]
+		bank[pkr].append(coin)					# Add coins to receiver (same as sender in this case)
+		
+	return 1

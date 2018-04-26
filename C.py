@@ -39,19 +39,70 @@ for i in range(total_users):
 	key_dict[pk] = sk
 	bank[pk] = []
 
+print "Initializing transaction queue"
 tq = init_transaction_queue()
+
+print "Initializing ledger\n"
 ledger = [init_ledger(key_dict[user_pks[0]], user_pks[0], bank, tq)]
 
-send_coins = bank[user_pks[0]][0:5]
+# User 0 should have 10 coins (from genesis block mint)
+# User 1 should have 0 coins
+# User 2 should have 0 coins
+print "Balance of user 0:", check_balance(user_pks[0], bank)
+print "Balance of user 1:", check_balance(user_pks[1], bank)
+print "Balance of user 2:", check_balance(user_pks[2], bank), "\n"
+
+# User 0 creates a transaction to send 2 coins to user 1
+print "Creating transaction from user 0 to user 1"
+send_coins = bank[user_pks[0]][0:2]
 transaction = gen_transaction(user_pks[0], key_dict[user_pks[0]], user_pks[1], send_coins, bank, tq, True)
 
-ledger.append(gen_block(1, key_dict[user_pks[0]], user_pks[0], tq, 1, bank, ledger[-1], 5))
-print check_balance(user_pks[0], bank)
+# User 2 generates a block using the previous transaction
+print "Generating block by user 2"
+block = gen_block(len(ledger), key_dict[user_pks[2]], user_pks[2], tq, 1, bank, ledger[-1], 5)
+if(ver_block(len(ledger), block, tq, bank, ledger, 5)): 
+	print "Adding block to ledger\n"
+	ledger.append(block)
 
-# need to make more transactions and add the transactions to the queue
-# edit gen_transaction to include message with signature as the transaction
-# create generate block function
-# create verify block function
+# User 0 should have 8 coins 
+# User 1 should have 2 coins
+# User 2 should have 10 coins
+print "Balance of user 0:", check_balance(user_pks[0], bank)
+print "Balance of user 1:", check_balance(user_pks[1], bank)
+print "Balance of user 2:", check_balance(user_pks[2], bank), "\n"
+	
+# User 0 creates a transaction to send 3 coins to user 1
+# User 2 creates a transaction to send 4 coins to user 0
+# User 2 creates a transaction to send the same 4 coins to user 1
+send_coins = bank[user_pks[0]][0:3]
+transaction = gen_transaction(user_pks[0], key_dict[user_pks[0]], user_pks[1], send_coins, bank, tq, True)
+send_coins = bank[user_pks[2]][0:4]
+transaction = gen_transaction(user_pks[2], key_dict[user_pks[2]], user_pks[0], send_coins, bank, tq, True)
+send_coins = bank[user_pks[2]][0:4]
+transaction = gen_transaction(user_pks[2], key_dict[user_pks[2]], user_pks[1], send_coins, bank, tq, True)
 
-# print_coins(users[0][1], bank)
-# print_coins(users[4][1], bank)
+# User 1 generates a block using the previous 3 transactions
+block = gen_block(len(ledger), key_dict[user_pks[1]], user_pks[1], tq, 3, bank, ledger[-1], 5)
+if(ver_block(len(ledger), block, tq, bank, ledger, 5)): 
+	print "Adding block to ledger\n"
+	ledger.append(block)
+
+# User 0 should still have 8 coins
+# User 1 should still have 2 coins
+# User 2 should still have 10 coins
+print "Balance of user 0:", check_balance(user_pks[0], bank)
+print "Balance of user 1:", check_balance(user_pks[1], bank)
+print "Balance of user 2:", check_balance(user_pks[2], bank), "\n"
+
+# User 1 generates a block using the 2 valid transactions which were added back
+block = gen_block(len(ledger), key_dict[user_pks[1]], user_pks[1], tq, 3, bank, ledger[-1], 5)
+if(ver_block(len(ledger), block, tq, bank, ledger, 5)): 
+	print "Adding block to ledger\n"
+	ledger.append(block)
+
+# User 0 should now have 9 coins
+# User 1 should now have 15 coins
+# User 2 should now have 6 coins
+print "Balance of user 0:", check_balance(user_pks[0], bank)
+print "Balance of user 1:", check_balance(user_pks[1], bank)
+print "Balance of user 2:", check_balance(user_pks[2], bank), "\n"
