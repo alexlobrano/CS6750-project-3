@@ -19,5 +19,5 @@ for i in range(5):
 	s = solve_puzzle(x, n)
 	end = time.time()
 	assert verify_puzzle(s, x, n) == 1
-	print "Time taken solving puzzle with", n, "zero bits:", end - start
+	print "Time taken solving puzzle with", n, "zero bits:", end - start, "\n"
 
