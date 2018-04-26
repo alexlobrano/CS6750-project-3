@@ -143,7 +143,7 @@ def solve_puzzle(x, n):
 		input = format(s, 'b').zfill(n) + format(int(x, 16), 'b').zfill(len(x)*4)	# Compute s || x
 		hash = hashlib.sha256(input)												# Compute H(s || x)
 		hash_bin = format(int(hash.hexdigest(), 16), 'b')							# Convert hash (hex string) to int, then format as binary string
-		if(256 - len(hash_bin) == n):												# Check if the number of leading zeroes is n
+		if(256 - len(hash_bin) >= n):												# Check if the number of leading zeroes is at least n
 			solved = True
 			break
 		s += 1																		# If not, increment s and try again
@@ -158,7 +158,7 @@ def verify_puzzle(s, x, n):
 	print "Hash:", hash.hexdigest()
 	print "Hash in binary form:", hash_bin.zfill(256)
 	print "Leading zero bits:", 256 - len(hash_bin), "\n"
-	if(256 - len(hash_bin) == n):													# Check if the number of leading zeroes is n										
+	if(256 - len(hash_bin) >= n):													# Check if the number of leading zeroes is at least n										
 		return 1
 	else:
 		return 0

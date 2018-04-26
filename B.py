@@ -20,4 +20,3 @@ for i in range(5):
 	end = time.time()
 	assert verify_puzzle(s, x, n) == 1
 	print "Time taken solving puzzle with", n, "zero bits:", end - start, "\n"
-
